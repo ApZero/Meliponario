@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="es-PY">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>Meliponario</title>
+<meta name="description" content="Gestión de cajas de abejas meliponas, revisiones, cosechas y clima.">
+<meta name="theme-color" content="#8A5A34">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Meliponario">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="app-header">
+  <div class="brand">
+    <span class="brand-icon">🐝</span>
+    <div>
+      <h1>Meliponario</h1>
+      <div class="subt" id="header-subt">Cargando…</div>
+    </div>
+  </div>
+</header>
+
+<main>
+
+  <!-- ===================== VISTA: CAJAS ===================== -->
+  <section id="view-cajas" class="view active">
+    <div class="section-title" id="tit-recordatorios" style="display:none;">Recordatorios</div>
+    <div id="lista-recordatorios"></div>
+
+    <div class="section-title">Mis cajas</div>
+    <div class="chip-group" id="filtro-estado-cajas" style="margin-bottom:10px;">
+      <span class="chip selected" data-estado="activa">Activas</span>
+      <span class="chip" data-estado="todas">Todas</span>
+      <span class="chip" data-estado="inactiva">Inactivas</span>
+      <span class="chip" data-estado="perdida">Perdidas</span>
+      <span class="chip" data-estado="fusionada">Fusionadas</span>
+    </div>
+    <div id="lista-cajas"></div>
+  </section>
+
+  <!-- ===================== VISTA: CLIMA ===================== -->
+  <section id="view-clima" class="view">
+    <div id="clima-contenido">
+      <div class="empty"><span class="ic">⛅</span>Obteniendo pronóstico…</div>
+    </div>
+  </section>
+
+  <!-- ===================== VISTA: ESPECIES ===================== -->
+  <section id="view-especies" class="view">
+    <div class="section-title">Consejos generales de manejo</div>
+    <div class="card" id="tips-generales-card"></div>
+    <div class="section-title">Especies y su cuidado</div>
+    <div id="lista-especies"></div>
+  </section>
+
+  <!-- ===================== VISTA: ESTADÍSTICAS ===================== -->
+  <section id="view-stats" class="view">
+    <div class="section-title">Resumen general</div>
+    <div class="card stat-grid" id="stat-grid-totales"></div>
+
+    <div class="section-title">Extracción por mes (año actual)</div>
+    <div class="card"><canvas id="chart-mensual" class="chart"></canvas></div>
+
+    <div class="section-title">Ranking de cajas por miel extraída</div>
+    <div class="card" id="ranking-cajas"></div>
+
+    <div class="section-title">Por especie</div>
+    <div class="card" id="stats-especie"></div>
+  </section>
+
+  <!-- ===================== VISTA: CONFIG / BACKUP ===================== -->
+  <section id="view-config" class="view">
+    <div class="section-title">Copia de seguridad</div>
+    <div class="card">
+      <div class="config-row">
+        <div>
+          <div class="label">Backup automático diario</div>
+          <div class="desc">Descarga un archivo al abrir la app por primera vez cada día</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="chk-autobackup" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="config-row">
+        <div>
+          <div class="label">Último backup</div>
+          <div class="desc" id="ultimo-backup-fecha">Nunca</div>
+        </div>
+      </div>
+    </div>
+    <button class="btn btn-primary btn-block" id="btn-exportar-ahora">⬇️ Descargar backup ahora</button>
+    <button class="btn btn-outline btn-block" id="btn-importar" style="margin-top:10px;">⬆️ Importar backup (.json)</button>
+    <input type="file" id="input-importar" accept="application/json" style="display:none;">
+
+    <div class="section-title">Ubicación para el clima</div>
+    <div class="card">
+      <label>Nombre del lugar</label>
+      <input type="text" id="cfg-lugar-nombre" placeholder="Filadelfia, Boquerón">
+      <div class="row-2">
+        <div>
+          <label>Latitud</label>
+          <input type="text" id="cfg-lat" placeholder="-22.34">
+        </div>
+        <div>
+          <label>Longitud</label>
+          <input type="text" id="cfg-lon" placeholder="-60.03">
+        </div>
+      </div>
+      <button class="btn btn-secondary btn-block" id="btn-guardar-ubicacion" style="margin-top:12px;">Guardar ubicación</button>
+      <div class="hint">Por defecto está configurado Filadelfia, Chaco Central, Paraguay.</div>
+    </div>
+
+    <div class="section-title">Acerca de</div>
+    <div class="card">
+      <p style="margin:0 0 8px; font-size:13.5px; line-height:1.5;">
+        Meliponario ayuda a llevar el registro de cajas de abejas sin aguijón (meliponas),
+        sus revisiones, cosechas de miel/propóleo/polen, divisiones y el clima para saber
+        cuándo conviene o no abrir las cajas. Los datos se guardan solo en este dispositivo.
+      </p>
+      <div class="hint">Versión de datos: <span id="app-version" class="mono"></span></div>
+    </div>
+  </section>
+
+</main>
+
+<button class="fab" id="fab-nueva-caja" title="Nueva caja">+</button>
+
+<nav class="tabbar">
+  <button class="tab-btn active" data-view="cajas"><span class="ic">📦</span>Cajas</button>
+  <button class="tab-btn" data-view="clima"><span class="ic">⛅</span>Clima</button>
+  <button class="tab-btn" data-view="especies"><span class="ic">🐝</span>Especies</button>
+  <button class="tab-btn" data-view="stats"><span class="ic">📊</span>Stats</button>
+  <button class="tab-btn" data-view="config"><span class="ic">⚙️</span>Ajustes</button>
+</nav>
+
+<!-- ===================== SHEET: NUEVA/EDITAR CAJA ===================== -->
+<div class="overlay" id="overlay-caja"></div>
+<div class="sheet" id="sheet-caja">
+  <div class="sheet-handle"></div>
+  <div class="sheet-header">
+    <h2 id="sheet-caja-titulo">Nueva caja</h2>
+    <button class="sheet-close" data-close="sheet-caja">✕</button>
+  </div>
+  <div class="sheet-body">
+    <input type="hidden" id="caja-id">
+    <label>Nombre de la caja</label>
+    <input type="text" id="caja-nombre" placeholder="Ej: Caja 12 — patio norte">
+
+    <label>Especie de abeja</label>
+    <select id="caja-especie"></select>
+
+    <label>Tamaño de la caja</label>
+    <div class="row-2">
+      <select id="caja-tamano-tipo">
+        <option value="chica">Chica</option>
+        <option value="mediana" selected>Mediana</option>
+        <option value="grande">Grande</option>
+      </select>
+      <input type="text" id="caja-tamano-detalle" placeholder="Ej: PNN, 3 alzas, 8L">
+    </div>
+
+    <label>Fecha del primer asentamiento</label>
+    <input type="date" id="caja-fecha-inicio">
+
+    <label>Origen</label>
+    <select id="caja-origen">
+      <option value="captura">Captura silvestre</option>
+      <option value="division">División de otra caja</option>
+      <option value="compra">Compra</option>
+      <option value="donacion">Donación</option>
+      <option value="otro">Otro</option>
+    </select>
+
+    <label>Caja madre (si viene de una división)</label>
+    <select id="caja-madre"></select>
+
+    <label>Ubicación</label>
+    <input type="text" id="caja-ubicacion" placeholder="Ej: Bajo el algarrobo, patio norte">
+
+    <label>Información adicional</label>
+    <textarea id="caja-info" placeholder="Notas generales, comportamiento, historia de la caja…"></textarea>
+
+    <label>Estado</label>
+    <select id="caja-estado">
+      <option value="activa">Activa</option>
+      <option value="inactiva">Inactiva / en observación</option>
+      <option value="perdida">Perdida</option>
+      <option value="fusionada">Fusionada con otra caja</option>
+    </select>
+
+    <button class="btn btn-primary btn-block" id="btn-guardar-caja" style="margin-top:18px;">Guardar caja</button>
+    <button class="btn btn-danger btn-block" id="btn-eliminar-caja" style="margin-top:10px; display:none;">Eliminar caja</button>
+  </div>
+</div>
+
+<!-- ===================== SHEET: DETALLE DE CAJA ===================== -->
+<div class="overlay" id="overlay-detalle"></div>
+<div class="sheet" id="sheet-detalle" style="max-height:96vh;">
+  <div class="sheet-handle"></div>
+  <div class="sheet-header">
+    <h2 id="detalle-titulo">Caja</h2>
+    <button class="sheet-close" data-close="sheet-detalle">✕</button>
+  </div>
+  <div class="sheet-body" id="detalle-contenido"></div>
+</div>
+
+<!-- ===================== SHEET: NUEVA REVISIÓN ===================== -->
+<div class="overlay" id="overlay-revision"></div>
+<div class="sheet" id="sheet-revision">
+  <div class="sheet-handle"></div>
+  <div class="sheet-header">
+    <h2>Nueva revisión</h2>
+    <button class="sheet-close" data-close="sheet-revision">✕</button>
+  </div>
+  <div class="sheet-body">
+    <input type="hidden" id="rev-caja-id">
+    <label>Fecha</label>
+    <input type="date" id="rev-fecha">
+
+    <label>Estado general</label>
+    <div class="chip-group" id="rev-estado-chips">
+      <span class="chip selected" data-val="normal">✅ Normal</span>
+      <span class="chip" data-val="atencion">⚠️ Atención</span>
+      <span class="chip" data-val="problema">🚨 Problema</span>
+    </div>
+
+    <label>Alertas detectadas</label>
+    <div class="chip-group" id="rev-alertas-chips">
+      <span class="chip" data-val="forida">🪰 Mosca fórida</span>
+      <span class="chip" data-val="hormigas">🐜 Hormigas</span>
+      <span class="chip" data-val="reservas_bajas">🍯 Reservas bajas</span>
+      <span class="chip" data-val="humedad">💧 Humedad excesiva</span>
+      <span class="chip" data-val="sin_reina">👑 Sin señales de reina</span>
+      <span class="chip" data-val="pillaje">⚔️ Señales de pillaje</span>
+      <span class="chip" data-val="division_natural">🐝 Lista para dividir</span>
+    </div>
+
+    <label>Notas</label>
+    <textarea id="rev-notas" placeholder="Observaciones de la revisión…"></textarea>
+
+    <div class="section-title" style="margin:16px 0 8px;">Extracción (opcional)</div>
+    <div class="row-2">
+      <div>
+        <label>Miel (g)</label>
+        <input type="number" id="rev-miel" min="0" placeholder="0">
+      </div>
+      <div>
+        <label>Propóleo (g)</label>
+        <input type="number" id="rev-propoleo" min="0" placeholder="0">
+      </div>
+    </div>
+    <div class="row-2">
+      <div>
+        <label>Polen / jevorá (g)</label>
+        <input type="number" id="rev-polen" min="0" placeholder="0">
+      </div>
+      <div>
+        <label>Cera (g)</label>
+        <input type="number" id="rev-cera" min="0" placeholder="0">
+      </div>
+    </div>
+
+    <button class="btn btn-primary btn-block" id="btn-guardar-revision" style="margin-top:18px;">Guardar revisión</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="species.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
