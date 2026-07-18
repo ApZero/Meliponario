@@ -96,6 +96,13 @@
           <div class="desc" id="ultimo-backup-fecha">Nunca</div>
         </div>
       </div>
+      <div class="config-row">
+        <div>
+          <div class="label">Espacio usado en este dispositivo</div>
+          <div class="desc">Las fotos ocupan la mayor parte. Si crece mucho, revisá fotos viejas que ya no necesites.</div>
+        </div>
+        <div class="mono" id="tamano-datos">0 KB</div>
+      </div>
     </div>
     <button class="btn btn-primary btn-block" id="btn-exportar-ahora">⬇️ Descargar backup ahora</button>
     <button class="btn btn-outline btn-block" id="btn-importar" style="margin-top:10px;">⬆️ Importar backup (.json)</button>
@@ -189,6 +196,12 @@
     <label>Información adicional</label>
     <textarea id="caja-info" placeholder="Notas generales, comportamiento, historia de la caja…"></textarea>
 
+    <label>Fotos de la caja</label>
+    <div class="foto-grid" id="caja-fotos-grid"></div>
+    <button class="btn btn-secondary btn-sm" id="btn-agregar-foto-caja">📷 Agregar foto</button>
+    <input type="file" id="input-foto-caja" accept="image/*" capture="environment" multiple style="display:none;">
+    <div class="hint">Máximo 4 fotos por caja. Se comprimen automáticamente y se incluyen en el backup.</div>
+
     <label>Estado</label>
     <select id="caja-estado">
       <option value="activa">Activa</option>
@@ -247,6 +260,12 @@
     <label>Notas</label>
     <textarea id="rev-notas" placeholder="Observaciones de la revisión…"></textarea>
 
+    <label>Fotos de esta revisión</label>
+    <div class="foto-grid" id="rev-fotos-grid"></div>
+    <button class="btn btn-secondary btn-sm" id="btn-agregar-foto-rev">📷 Agregar foto</button>
+    <input type="file" id="input-foto-rev" accept="image/*" capture="environment" multiple style="display:none;">
+    <div class="hint">Máximo 3 fotos por revisión (panal, cosecha, plagas, etc).</div>
+
     <div class="section-title" style="margin:16px 0 8px;">Extracción (opcional)</div>
     <div class="row-2">
       <div>
@@ -272,6 +291,14 @@
     <button class="btn btn-primary btn-block" id="btn-guardar-revision" style="margin-top:18px;">Guardar revisión</button>
   </div>
 </div>
+
+<!-- ===================== LIGHTBOX DE FOTOS ===================== -->
+<div class="overlay" id="overlay-lightbox"></div>
+<div class="lightbox" id="lightbox">
+  <button class="lightbox-close" id="lightbox-close">✕</button>
+  <img id="lightbox-img" src="" alt="Foto">
+</div>
+<input type="file" id="input-foto-especie" accept="image/*" multiple style="display:none;">
 
 <div class="toast" id="toast"></div>
 

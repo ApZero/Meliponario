@@ -1,7 +1,7 @@
 // sw.js — Service Worker de Meliponario
 // IMPORTANTE: subí CACHE_VERSION cada vez que actualices archivos, para forzar
 // la actualización en los dispositivos que ya tienen la app instalada.
-const CACHE_VERSION = 'meliponario-v1';
+const CACHE_VERSION = 'meliponario-v3';
 
 const ASSETS = [
   './',

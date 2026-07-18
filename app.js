@@ -10,6 +10,7 @@ const DEFAULT_LUGAR = { nombre: 'Filadelfia, Boquerón', lat: -22.35, lon: -60.0
 let state = {
   version: APP_DATA_VERSION,
   cajas: [], // cada caja incluye .revisiones = []
+  fotosEspecies: {}, // { [especieId]: [dataURL, ...] } — fotos de referencia agregadas por el usuario
 };
 
 let config = {
@@ -55,6 +56,108 @@ function especiePorId(id) {
   return ESPECIES.find((e) => e.id === id) || ESPECIES[0];
 }
 
+// Enlace a Wikimedia Commons: búsqueda de imágenes libres para identificar/comparar la especie.
+function enlaceFotosEspecie(especie) {
+  const q = encodeURIComponent(especie.nombreCientifico.split('/')[0].trim());
+  return `https://commons.wikimedia.org/w/index.php?search=${q}&title=Special:MediaSearch&type=image`;
+}
+
+// ===================================================================
+// FOTOS: compresión y utilidades
+// ===================================================================
+const FOTO_MAX_DIM = 1000;
+const FOTO_CALIDAD = 0.72;
+
+function comprimirImagen(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > height && width > FOTO_MAX_DIM) {
+          height = Math.round(height * (FOTO_MAX_DIM / width));
+          width = FOTO_MAX_DIM;
+        } else if (height > FOTO_MAX_DIM) {
+          width = Math.round(width * (FOTO_MAX_DIM / height));
+          height = FOTO_MAX_DIM;
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', FOTO_CALIDAD));
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function renderFotoGrid(containerId, fotos, onQuitar) {
+  const cont = document.getElementById(containerId);
+  cont.innerHTML = fotos.map((f, i) => `
+    <div class="foto-thumb" data-i="${i}">
+      <img src="${f}" alt="Foto">
+      <button class="foto-quitar" data-quitar="${i}" type="button">✕</button>
+    </div>`).join('');
+  cont.querySelectorAll('[data-quitar]').forEach((btn) => {
+    btn.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      onQuitar(parseInt(btn.dataset.quitar));
+    });
+  });
+}
+
+function abrirLightbox(src) {
+  document.getElementById('lightbox-img').src = src;
+  document.getElementById('lightbox').classList.add('open');
+  document.getElementById('overlay-lightbox').classList.add('open');
+}
+function cerrarLightbox() {
+  document.getElementById('lightbox').classList.remove('open');
+  document.getElementById('overlay-lightbox').classList.remove('open');
+}
+
+function renderFotoGaleria(fotos) {
+  if (!fotos || !fotos.length) return '';
+  return `<div class="foto-galeria">${fotos.map((f) => `<div class="foto-thumb" data-src="${f}"><img src="${f}" alt="Foto de la caja"></div>`).join('')}</div>`;
+}
+function renderFotoMiniRow(fotos) {
+  if (!fotos || !fotos.length) return '';
+  return `<div class="foto-mini-row">${fotos.map((f) => `<div class="foto-thumb" data-src="${f}"><img src="${f}" alt="Foto de la revisión"></div>`).join('')}</div>`;
+}
+function activarClicksGaleria(scopeEl) {
+  scopeEl.querySelectorAll('[data-src]').forEach((el) => {
+    el.addEventListener('click', () => abrirLightbox(el.dataset.src));
+  });
+}
+
+// ===================================================================
+// FOTOS DE REFERENCIA POR ESPECIE (para comparar/identificar)
+// ===================================================================
+const MAX_FOTOS_ESPECIE = 6;
+
+function fotosDeEspecie(especieId) {
+  return state.fotosEspecies[especieId] || [];
+}
+
+function agregarFotoEspecie(especieId, dataURL) {
+  if (!state.fotosEspecies[especieId]) state.fotosEspecies[especieId] = [];
+  if (state.fotosEspecies[especieId].length >= MAX_FOTOS_ESPECIE) return false;
+  state.fotosEspecies[especieId].push(dataURL);
+  guardarEstado();
+  return true;
+}
+
+function quitarFotoEspecie(especieId, index) {
+  if (!state.fotosEspecies[especieId]) return;
+  state.fotosEspecies[especieId].splice(index, 1);
+  guardarEstado();
+}
+
 function toast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg;
@@ -73,6 +176,8 @@ function cargarEstado() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) state = JSON.parse(raw);
+    if (!state.fotosEspecies) state.fotosEspecies = {};
+    if (!state.cajas) state.cajas = [];
   } catch (e) { console.error('Error cargando estado', e); }
 }
 function guardarConfig() {
@@ -102,6 +207,7 @@ function crearCaja(datos) {
     info: datos.info,
     estado: datos.estado || 'activa',
     creadaEn: hoyISO(),
+    fotos: datos.fotos || [],
     revisiones: [],
   };
   state.cajas.push(caja);
@@ -136,6 +242,7 @@ function agregarRevision(cajaId, datos) {
     propoleo: Number(datos.propoleo) || 0,
     polen: Number(datos.polen) || 0,
     cera: Number(datos.cera) || 0,
+    fotos: datos.fotos || [],
   });
   c.revisiones.sort((a, b) => a.fecha.localeCompare(b.fecha));
   guardarEstado();
@@ -409,6 +516,7 @@ function abrirDetalleCaja(id) {
       ${r.notas ? `<div class="notas">${escapeHTML(r.notas)}</div>` : ''}
       ${extrItems.length ? `<div class="extraccion">${extrItems.map((x) => `<span>${x}</span>`).join('')}</div>` : ''}
       ${r.alertas.length ? `<div class="tags">${r.alertas.map((a) => `<span class="pill aviso">${alertaLabels[a] || a}</span>`).join('')}</div>` : ''}
+      ${renderFotoMiniRow(r.fotos)}
     </div>`;
   }).join('') || '<p class="hint">Todavía no hay revisiones registradas.</p>';
 
@@ -421,6 +529,7 @@ function abrirDetalleCaja(id) {
     ${madre ? `<p class="hint">🌱 Proviene de división de <b>${escapeHTML(madre.nombre)}</b></p>` : ''}
     ${c.ubicacion ? `<p class="hint">📍 ${escapeHTML(c.ubicacion)}</p>` : ''}
     ${c.info ? `<p style="font-size:13.5px;">${escapeHTML(c.info)}</p>` : ''}
+    ${renderFotoGaleria(c.fotos)}
 
     <div class="section-title">Totales extraídos</div>
     <div class="stat-grid" style="margin-bottom:14px;">
@@ -453,6 +562,7 @@ function abrirDetalleCaja(id) {
   document.getElementById('detalle-contenido').querySelectorAll('[data-hija]').forEach((el) => {
     el.addEventListener('click', () => abrirDetalleCaja(el.dataset.hija));
   });
+  activarClicksGaleria(document.getElementById('detalle-contenido'));
   document.getElementById('btn-nueva-revision-detalle').addEventListener('click', () => abrirSheetRevision(c.id));
   document.getElementById('btn-dividir-caja').addEventListener('click', () => {
     cerrarSheet('sheet-detalle');
@@ -486,6 +596,8 @@ function poblarSelectMadre(excluirId) {
     opciones.map((c) => `<option value="${c.id}">${escapeHTML(c.nombre)}</option>`).join('');
 }
 
+let cajaFotosTemp = [];
+
 function abrirSheetCaja(id, cajaMadreIdPreset) {
   poblarSelectEspecies();
   poblarSelectMadre(id);
@@ -506,6 +618,7 @@ function abrirSheetCaja(id, cajaMadreIdPreset) {
     document.getElementById('caja-ubicacion').value = c.ubicacion || '';
     document.getElementById('caja-info').value = c.info || '';
     document.getElementById('caja-estado').value = c.estado;
+    cajaFotosTemp = (c.fotos || []).slice();
   } else {
     document.getElementById('caja-id').value = '';
     document.getElementById('caja-nombre').value = '';
@@ -521,8 +634,17 @@ function abrirSheetCaja(id, cajaMadreIdPreset) {
       const madre = state.cajas.find((x) => x.id === cajaMadreIdPreset);
       if (madre) document.getElementById('caja-especie').value = madre.especieId;
     }
+    cajaFotosTemp = [];
   }
+  refrescarFotoGridCaja();
   abrirSheet('sheet-caja');
+}
+
+function refrescarFotoGridCaja() {
+  renderFotoGrid('caja-fotos-grid', cajaFotosTemp, (i) => {
+    cajaFotosTemp.splice(i, 1);
+    refrescarFotoGridCaja();
+  });
 }
 
 function guardarCajaDesdeForm() {
@@ -540,6 +662,7 @@ function guardarCajaDesdeForm() {
     ubicacion: document.getElementById('caja-ubicacion').value.trim(),
     info: document.getElementById('caja-info').value.trim(),
     estado: document.getElementById('caja-estado').value,
+    fotos: cajaFotosTemp.slice(),
   };
   if (id) {
     actualizarCaja(id, datos);
@@ -557,6 +680,14 @@ function guardarCajaDesdeForm() {
 // ===================================================================
 let revEstadoSel = 'normal';
 let revAlertasSel = new Set();
+let revFotosTemp = [];
+
+function refrescarFotoGridRev() {
+  renderFotoGrid('rev-fotos-grid', revFotosTemp, (i) => {
+    revFotosTemp.splice(i, 1);
+    refrescarFotoGridRev();
+  });
+}
 
 function abrirSheetRevision(cajaId) {
   document.getElementById('rev-caja-id').value = cajaId;
@@ -568,8 +699,10 @@ function abrirSheetRevision(cajaId) {
   document.getElementById('rev-cera').value = '';
   revEstadoSel = 'normal';
   revAlertasSel = new Set();
+  revFotosTemp = [];
   document.querySelectorAll('#rev-estado-chips .chip').forEach((c) => c.classList.toggle('selected', c.dataset.val === 'normal'));
   document.querySelectorAll('#rev-alertas-chips .chip').forEach((c) => c.classList.remove('selected'));
+  refrescarFotoGridRev();
   abrirSheet('sheet-revision');
 }
 
@@ -586,6 +719,7 @@ function guardarRevisionDesdeForm() {
     propoleo: document.getElementById('rev-propoleo').value,
     polen: document.getElementById('rev-polen').value,
     cera: document.getElementById('rev-cera').value,
+    fotos: revFotosTemp.slice(),
   });
   toast('Revisión guardada');
   cerrarSheet('sheet-revision');
@@ -670,8 +804,46 @@ function renderEspecies() {
       </div>
       <p class="hint">🌡️ Ideal entre ${e.tempIdealMin}°C y ${e.tempIdealMax}°C · ${e.entrada}</p>
       <ul>${e.tips.map((t) => `<li>${t}</li>`).join('')}</ul>
+      <a class="especie-foto-link" href="${enlaceFotosEspecie(e)}" target="_blank" rel="noopener">🔍 Buscar fotos en Wikimedia Commons</a>
+
+      <div class="section-title" style="margin:14px 0 6px; font-size:11px;">Tus fotos de referencia</div>
+      <div class="foto-grid especie-foto-grid" id="fotos-especie-${e.id}"></div>
+      <button class="btn btn-outline btn-sm" data-add-foto-especie="${e.id}">📷 Guardar foto de referencia</button>
+      <div class="hint">Guardá acá una foto propia (o una captura de pantalla de una fuente confiable) para comparar y reconocer esta especie más rápido en el campo.</div>
     </div>
   `).join('');
+
+  ESPECIES.forEach((e) => {
+    refrescarFotoGridEspecie(e.id);
+  });
+  document.querySelectorAll('[data-add-foto-especie]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      especieFotoActiva = btn.dataset.addFotoEspecie;
+      document.getElementById('input-foto-especie').click();
+    });
+  });
+}
+
+let especieFotoActiva = null;
+
+function refrescarFotoGridEspecie(especieId) {
+  const cont = document.getElementById(`fotos-especie-${especieId}`);
+  if (!cont) return;
+  const fotos = fotosDeEspecie(especieId);
+  if (!fotos.length) { cont.innerHTML = '<p class="hint" style="margin:2px 0 6px;">Todavía no guardaste fotos de esta especie.</p>'; return; }
+  cont.innerHTML = fotos.map((f, i) => `
+    <div class="foto-thumb" data-i="${i}" data-src="${f}">
+      <img src="${f}" alt="Foto de referencia">
+      <button class="foto-quitar" data-quitar-especie="${especieId}" data-i="${i}" type="button">✕</button>
+    </div>`).join('');
+  activarClicksGaleria(cont);
+  cont.querySelectorAll('[data-quitar-especie]').forEach((btn) => {
+    btn.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      quitarFotoEspecie(btn.dataset.quitarEspecie, parseInt(btn.dataset.i));
+      refrescarFotoGridEspecie(especieId);
+    });
+  });
 }
 
 // ===================================================================
@@ -821,6 +993,11 @@ function importarBackup(file) {
   reader.readAsText(file);
 }
 
+function estimarTamanoDatosKB() {
+  const raw = localStorage.getItem(STORAGE_KEY) || '';
+  return Math.round((raw.length * 2) / 1024); // aprox. 2 bytes/char en memoria
+}
+
 function renderConfig() {
   document.getElementById('chk-autobackup').checked = config.autobackup;
   document.getElementById('ultimo-backup-fecha').textContent = config.ultimoBackup
@@ -830,6 +1007,9 @@ function renderConfig() {
   document.getElementById('cfg-lat').value = config.lugar.lat;
   document.getElementById('cfg-lon').value = config.lugar.lon;
   document.getElementById('app-version').textContent = 'v' + APP_DATA_VERSION;
+  const kb = estimarTamanoDatosKB();
+  const elTam = document.getElementById('tamano-datos');
+  if (elTam) elTam.textContent = kb > 1024 ? `${(kb / 1024).toFixed(1)} MB` : `${kb} KB`;
 }
 
 // ===================================================================
@@ -880,6 +1060,49 @@ function iniciarEventos() {
   });
   ['overlay-caja', 'overlay-detalle', 'overlay-revision'].forEach((id) => {
     document.getElementById(id).addEventListener('click', () => cerrarSheet('sheet-' + id.replace('overlay-', '')));
+  });
+
+  document.getElementById('btn-agregar-foto-caja').addEventListener('click', () => document.getElementById('input-foto-caja').click());
+  document.getElementById('input-foto-caja').addEventListener('change', async (e) => {
+    const archivos = Array.from(e.target.files).slice(0, 4 - cajaFotosTemp.length);
+    for (const f of archivos) {
+      try {
+        const b64 = await comprimirImagen(f);
+        cajaFotosTemp.push(b64);
+      } catch (err) { console.error('Error procesando foto', err); }
+    }
+    refrescarFotoGridCaja();
+    e.target.value = '';
+  });
+
+  document.getElementById('btn-agregar-foto-rev').addEventListener('click', () => document.getElementById('input-foto-rev').click());
+  document.getElementById('input-foto-rev').addEventListener('change', async (e) => {
+    const archivos = Array.from(e.target.files).slice(0, 3 - revFotosTemp.length);
+    for (const f of archivos) {
+      try {
+        const b64 = await comprimirImagen(f);
+        revFotosTemp.push(b64);
+      } catch (err) { console.error('Error procesando foto', err); }
+    }
+    refrescarFotoGridRev();
+    e.target.value = '';
+  });
+
+  document.getElementById('lightbox-close').addEventListener('click', cerrarLightbox);
+  document.getElementById('overlay-lightbox').addEventListener('click', cerrarLightbox);
+
+  document.getElementById('input-foto-especie').addEventListener('change', async (e) => {
+    const especieId = especieFotoActiva;
+    if (!especieId) return;
+    const archivos = Array.from(e.target.files).slice(0, MAX_FOTOS_ESPECIE - fotosDeEspecie(especieId).length);
+    for (const f of archivos) {
+      try {
+        const b64 = await comprimirImagen(f);
+        agregarFotoEspecie(especieId, b64);
+      } catch (err) { console.error('Error procesando foto', err); }
+    }
+    refrescarFotoGridEspecie(especieId);
+    e.target.value = '';
   });
 
   document.getElementById('btn-guardar-caja').addEventListener('click', guardarCajaDesdeForm);
